@@ -21,7 +21,7 @@
                 <h1 class="text-2xl font-bold flex items-center gap-2 text-indigo-400">
                     <i class="fa-solid fa-cash-register"></i> Kasir Toko Velovy
                 </h1>
-                <p class="text-xs text-slate-400 mt-1">POS System dengan Shortcut Keyboard & Indikator Stok Menipis</p>
+                <p class="text-xs text-slate-400 mt-1"></p>
             </div>
             
             <!-- INDIKATOR ROLE & STATUS KONEKSI -->
@@ -74,10 +74,8 @@
                         </span>
                         <span id="countStokMenipis" class="text-xs bg-rose-600 text-white px-2.5 py-0.5 rounded-full font-semibold">0 Produk</span>
                     </div>
-                    <p class="text-xs text-slate-400">Segera lakukan restok untuk produk-produk di bawah ini:</p>
-                    <div id="listStokMenipis" class="flex flex-wrap gap-2 pt-1 text-xs">
-                        <!-- Badges produk stok menipis dirender otomatis dari Firebase -->
-                    </div>
+                    <p class="text-xs text-slate-400"></p>
+                    <div id="listStokMenipis" class="flex flex-wrap gap-2 pt-1 text-xs"></div>
                 </div>
 
                 <!-- KELOLA MASTER PRODUK (KHUSUS ADMIN) -->
@@ -104,7 +102,6 @@
 
                 <!-- FORM INPUT BARANG KASIR WITH SEARCH BAR -->
                 <div class="bg-slate-800 p-6 rounded-2xl shadow-xl border border-slate-700 space-y-4">
-                    <!-- KOLOM PENCARIAN PRODUK -->
                     <div>
                         <label class="block text-sm text-slate-400 mb-1"><i class="fa-solid fa-magnifying-glass mr-1"></i> Cari Produk (Tekan F4)</label>
                         <input type="text" id="searchProduk" oninput="filterKatalogProduk()" placeholder="Ketik nama produk untuk menyaring katalog..." class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 focus:outline-none focus:border-indigo-500 text-sm text-slate-200 mb-3">
@@ -162,7 +159,7 @@
                 <div class="bg-slate-800 p-6 rounded-2xl shadow-xl border border-slate-700">
                     <div class="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3 mb-4">
                         <h2 class="text-lg font-semibold text-slate-300 flex items-center gap-2">
-                            <i class="fa-solid fa-database text-emerald-400"></i> Riwayat Transaksi Cloud
+                            <i class="fa-solid fa-database text-emerald-400"></i>
                         </h2>
                         <div class="flex flex-wrap items-center gap-2">
                             <div class="flex items-center gap-2 mr-2">
@@ -187,7 +184,7 @@
                         <table class="w-full text-left border-collapse">
                             <thead class="sticky top-0 bg-slate-800 border-b border-slate-700 text-slate-400 text-xs z-10">
                                 <tr>
-                                    <th class="py-2.5 px-3">ID / Waktu</th>
+                                    <th class="py-2.5 px-3">No. TRX / Waktu</th>
                                     <th class="py-2.5 px-3">Rincian Barang</th>
                                     <th class="py-2.5 px-3">Total Belanja</th>
                                     <th class="py-2.5 px-3">Bayar & Kembali</th>
@@ -448,10 +445,16 @@
                 sectionProduk.classList.add('hidden');
             }
             renderRiwayatLokal();
+            muatProdukRealtime();
         }
 
         // ================= MANAJEMEN MASTER PRODUK & STOK CLOUD =================
         window.tambahProdukCloud = async function() {
+            if (userRole !== 'admin') {
+                Swal.fire({ icon: 'error', title: 'Akses Ditolak', text: 'Hanya Admin yang dapat menambah produk!', background: '#1e293b', color: '#f8fafc' });
+                return;
+            }
+
             const nama = document.getElementById('adminNamaProduk').value.trim();
             const harga = parseFloat(document.getElementById('adminHargaProduk').value);
             const stok = parseInt(document.getElementById('adminStokProduk').value) || 0;
@@ -475,7 +478,120 @@
             }
         }
 
+        // FUNGSI RESTOK CEPAK (KHUSUS ADMIN)
+        window.quickRestock = async function(key, nama, stokSekarang) {
+            if (userRole !== 'admin') {
+                Swal.fire({
+                    title: 'Akses Dibatasi',
+                    text: 'Fitur restok hanya dapat dilakukan oleh Admin. Silakan login Admin terlebih dahulu!',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#e11d48',
+                    cancelButtonColor: '#475569',
+                    confirmButtonText: '<i class="fa-solid fa-lock-open mr-1"></i> Login Admin',
+                    cancelButtonText: 'Batal',
+                    background: '#1e293b',
+                    color: '#f8fafc'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        toggleModeAdmin();
+                    }
+                });
+                return;
+            }
+
+            const { value: tambahStok } = await Swal.fire({
+                title: `Tambah Stok: ${nama}`,
+                text: `Sisa stok saat ini: ${stokSekarang} pcs. Masukkan jumlah stok yang ditambahkan:`,
+                input: 'number',
+                inputAttributes: { min: 1, step: 1 },
+                inputValue: 10,
+                showCancelButton: true,
+                confirmButtonColor: '#10b981',
+                cancelButtonColor: '#475569',
+                confirmButtonText: '<i class="fa-solid fa-plus mr-1"></i> Tambah Stok',
+                cancelButtonText: 'Batal',
+                background: '#1e293b',
+                color: '#f8fafc',
+                inputValidator: (value) => {
+                    if (!value || parseInt(value) <= 0) {
+                        return 'Jumlah stok harus lebih dari 0!';
+                    }
+                }
+            });
+
+            if (tambahStok) {
+                const stokBaru = (parseInt(stokSekarang) || 0) + parseInt(tambahStok);
+                try {
+                    await update(ref(db, `produk/${key}`), { stok: stokBaru });
+                    Toast.fire({ icon: 'success', title: `Stok ${nama} diperbarui menjadi ${stokBaru} pcs` });
+                } catch (error) {
+                    Swal.fire({ icon: 'error', title: 'Gagal Restok', text: error.message, background: '#1e293b', color: '#f8fafc' });
+                }
+            }
+        }
+
+        // FUNGSI EDIT DETAIL PRODUK (KHUSUS ADMIN)
+        window.editProdukCloud = async function(key, namaLama, hargaLama, stokLama) {
+            if (userRole !== 'admin') {
+                Swal.fire({ icon: 'error', title: 'Akses Ditolak', text: 'Hanya Admin yang dapat mengedit produk!', background: '#1e293b', color: '#f8fafc' });
+                return;
+            }
+
+            const { value: formValues } = await Swal.fire({
+                title: `Edit Produk`,
+                html: `
+                    <div class="space-y-3 text-left">
+                        <div>
+                            <label class="text-xs text-slate-400 block mb-1">Nama Produk</label>
+                            <input id="swalNama" class="swal2-input bg-slate-900 border-slate-700 text-white w-full m-0 text-sm focus:outline-none focus:border-indigo-500" value="${namaLama}">
+                        </div>
+                        <div>
+                            <label class="text-xs text-slate-400 block mb-1">Harga Satuan (Rp)</label>
+                            <input id="swalHarga" type="number" class="swal2-input bg-slate-900 border-slate-700 text-white w-full m-0 text-sm focus:outline-none focus:border-indigo-500" value="${hargaLama}">
+                        </div>
+                        <div>
+                            <label class="text-xs text-slate-400 block mb-1">Total Stok</label>
+                            <input id="swalStok" type="number" class="swal2-input bg-slate-900 border-slate-700 text-white w-full m-0 text-sm focus:outline-none focus:border-indigo-500" value="${stokLama}">
+                        </div>
+                    </div>
+                `,
+                focusConfirm: false,
+                showCancelButton: true,
+                confirmButtonColor: '#3b82f6',
+                cancelButtonColor: '#475569',
+                confirmButtonText: 'Simpan Perubahan',
+                cancelButtonText: 'Batal',
+                background: '#1e293b',
+                color: '#f8fafc',
+                preConfirm: () => {
+                    const nama = document.getElementById('swalNama').value.trim();
+                    const harga = parseFloat(document.getElementById('swalHarga').value);
+                    const stok = parseInt(document.getElementById('swalStok').value);
+                    if (!nama || isNaN(harga) || harga <= 0 || isNaN(stok) || stok < 0) {
+                        Swal.showValidationMessage('Mohon isi semua data dengan benar!');
+                        return false;
+                    }
+                    return { nama, harga, stok };
+                }
+            });
+
+            if (formValues) {
+                try {
+                    await update(ref(db, `produk/${key}`), formValues);
+                    Toast.fire({ icon: 'success', title: 'Data produk berhasil diperbarui' });
+                } catch (error) {
+                    Swal.fire({ icon: 'error', title: 'Gagal Edit', text: error.message, background: '#1e293b', color: '#f8fafc' });
+                }
+            }
+        }
+
         window.hapusProdukCloud = async function(key) {
+            if (userRole !== 'admin') {
+                Swal.fire({ icon: 'error', title: 'Akses Ditolak', text: 'Hanya Admin yang dapat menghapus produk!', background: '#1e293b', color: '#f8fafc' });
+                return;
+            }
+
             Swal.fire({
                 title: 'Hapus Produk?',
                 text: "Produk akan dihapus permanen dari katalog database.",
@@ -545,17 +661,23 @@
                         const stokInfo = prod.stok !== undefined ? prod.stok : '∞';
                         const isStokMenipis = typeof prod.stok === 'number' && prod.stok < 5;
                         const badgeStok = isStokMenipis ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+                        const namaClean = prod.nama.replace(/'/g, "\\'");
 
-                        // Kumpulkan produk stok < 5 pcs
                         if (isStokMenipis) {
-                            itemsStokMenipis.push({ nama: prod.nama, stok: prod.stok, harga: prod.harga });
+                            itemsStokMenipis.push({ key, nama: prod.nama, stok: prod.stok, harga: prod.harga });
                         }
 
                         htmlListAdmin += `
                             <span class="inline-flex items-center gap-1.5 bg-slate-900 border border-slate-700 text-slate-300 text-xs px-2.5 py-1 rounded-lg">
                                 <span>${prod.nama} (${formatRupiah(prod.harga)})</span>
                                 <span class="${badgeStok} text-[10px] px-1.5 py-0.5 rounded font-bold">Stok: ${stokInfo}</span>
-                                <button onclick="hapusProdukCloud('${key}')" class="text-rose-400 hover:text-rose-300 ml-1">
+                                <button onclick="quickRestock('${key}', '${namaClean}', ${prod.stok || 0})" class="text-emerald-400 hover:text-emerald-300 ml-1" title="Restok Cepat (+ Stok)">
+                                    <i class="fa-solid fa-circle-plus"></i>
+                                </button>
+                                <button onclick="editProdukCloud('${key}', '${namaClean}', ${prod.harga}, ${prod.stok || 0})" class="text-sky-400 hover:text-sky-300 ml-0.5" title="Edit Detail Produk">
+                                    <i class="fa-solid fa-pen-to-square"></i>
+                                </button>
+                                <button onclick="hapusProdukCloud('${key}')" class="text-rose-400 hover:text-rose-300 ml-0.5" title="Hapus Produk">
                                     <i class="fa-solid fa-xmark"></i>
                                 </button>
                             </span>
@@ -563,16 +685,27 @@
                     });
                     containerListAdmin.innerHTML = htmlListAdmin;
 
-                    // Update Widget Display Stok Menipis
                     if (itemsStokMenipis.length > 0) {
                         widgetStok.classList.remove('hidden');
                         countStokMenipis.innerText = `${itemsStokMenipis.length} Produk`;
-                        listStokMenipis.innerHTML = itemsStokMenipis.map(item => `
-                            <span class="bg-rose-500/20 border border-rose-500/30 text-rose-300 px-2.5 py-1 rounded-lg flex items-center gap-1 font-medium shadow-sm">
-                                <i class="fa-solid fa-box text-rose-400 mr-0.5"></i> ${item.nama}
-                                <span class="bg-rose-600 text-white text-[10px] px-1.5 py-0.2 rounded font-bold ml-1">${item.stok} pcs</span>
-                            </span>
-                        `).join('');
+                        listStokMenipis.innerHTML = itemsStokMenipis.map(item => {
+                            const itemNamaClean = item.nama.replace(/'/g, "\\'");
+                            const btnRestokHtml = userRole === 'admin' ? 
+                                `<button onclick="quickRestock('${item.key}', '${itemNamaClean}', ${item.stok})" class="bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] px-2 py-0.5 rounded transition flex items-center gap-1 font-semibold shadow ml-1" title="Restok Cepat">
+                                    <i class="fa-solid fa-plus text-[10px]"></i> Restok
+                                </button>` :
+                                `<button onclick="quickRestock('${item.key}', '${itemNamaClean}', ${item.stok})" class="bg-slate-700 hover:bg-slate-600 text-slate-300 text-[11px] px-2 py-0.5 rounded transition flex items-center gap-1 font-semibold border border-slate-600 ml-1" title="Restok (Khusus Admin)">
+                                    <i class="fa-solid fa-lock text-[10px]"></i> Restok
+                                </button>`;
+
+                            return `
+                                <span class="bg-rose-500/20 border border-rose-500/30 text-rose-300 px-2.5 py-1 rounded-lg flex items-center gap-2 font-medium shadow-sm">
+                                    <span><i class="fa-solid fa-box text-rose-400 mr-1"></i> ${item.nama}</span>
+                                    <span class="bg-rose-600 text-white text-[10px] px-1.5 py-0.2 rounded font-bold">${item.stok} pcs</span>
+                                    ${btnRestokHtml}
+                                </span>
+                            `;
+                        }).join('');
                     } else {
                         widgetStok.classList.add('hidden');
                     }
@@ -715,6 +848,7 @@
             }
         }
 
+        // PROSES TRANSAKSI DENGAN NOMOR URUT SEKUENSIAL & PENCATATAN WAKTU LENGKAP
         window.prosesTransaksi = async function() {
             if (keranjang.length === 0) {
                 Swal.fire({ icon: 'warning', title: 'Keranjang Kosong', text: 'Harap tambahkan barang terlebih dahulu!', background: '#1e293b', color: '#f8fafc' });
@@ -739,9 +873,34 @@
 
             let kembalian = uangBayar - totalAkhir;
 
+            // hitung nomor urut terbesar dari riwayat database
+            let maxNum = 0;
+            if (cacheRiwayat) {
+                Object.values(cacheRiwayat).forEach(t => {
+                    if (t.id && t.id.startsWith('TRX-')) {
+                        let num = parseInt(t.id.replace('TRX-', ''), 10);
+                        if (!isNaN(num) && num > maxNum) maxNum = num;
+                    }
+                });
+            }
+            const idSekuensial = 'TRX-' + String(maxNum + 1).padStart(4, '0');
+
+            // Format Waktu Lengkap (Hari, Tanggal Bulan Tahun Jam:Menit:Detik)
+            const skrg = new Date();
+            const opsiWaktu = {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            };
+            const waktuLengkap = skrg.toLocaleDateString('id-ID', opsiWaktu).replace(/\./g, ':');
+
             const dataBaru = {
-                id: 'TRX-' + Date.now().toString().slice(-6),
-                waktu: new Date().toLocaleString('id-ID'),
+                id: idSekuensial,
+                waktu: waktuLengkap,
                 timestamp: -Date.now(),
                 items: [...keranjang],
                 subtotal: subtotal,
@@ -775,7 +934,7 @@
                 renderTabel();
 
                 cetakStrukData(dataBaru);
-                Toast.fire({ icon: 'success', title: 'Transaksi Sukses & Stok Diperbarui!' });
+                Toast.fire({ icon: 'success', title: `${idSekuensial} Berhasil Diproses!` });
             } catch (error) {
                 Swal.fire({ icon: 'error', title: 'Gagal Transaksi', text: error.message, background: '#1e293b', color: '#f8fafc' });
             }
@@ -783,6 +942,11 @@
 
         // ================= FUNGSI KHUSUS ADMIN =================
         window.hapusTransaksiSatuan = async function(firebaseKey) {
+            if (userRole !== 'admin') {
+                Swal.fire({ icon: 'error', title: 'Akses Ditolak', text: 'Hanya Admin yang dapat menghapus transaksi!', background: '#1e293b', color: '#f8fafc' });
+                return;
+            }
+
             Swal.fire({
                 title: 'Hapus Transaksi?',
                 text: "Data transaksi akan dihapus permanen dari cloud.",
@@ -806,6 +970,11 @@
         };
 
         window.hapusSemuaRiwayat = async function() {
+            if (userRole !== 'admin') {
+                Swal.fire({ icon: 'error', title: 'Akses Ditolak', text: 'Hanya Admin yang dapat mengosongkan riwayat!', background: '#1e293b', color: '#f8fafc' });
+                return;
+            }
+
             if (!cacheRiwayat || Object.keys(cacheRiwayat).length === 0) {
                 Toast.fire({ icon: 'info', title: 'Tidak ada data untuk dihapus.' });
                 return;
@@ -833,37 +1002,54 @@
             });
         };
 
+        // EKSPOR CSV LENGKAP DENGAN HARI, TANGGAL & JAM
         window.jalankanEksporCSV = function() {
             if (!cacheRiwayat || Object.keys(cacheRiwayat).length === 0) return Toast.fire({ icon: 'warning', title: 'Belum ada data untuk diekspor!' });
             let csvContent = "\uFEFF";
-            csvContent += "ID Transaksi;Waktu;Metode;Total Akhir;Uang Bayar;Kembalian;Diskon (%);Pajak (%);Rincian Barang\n";
-            Object.values(cacheRiwayat).forEach(trx => {
+            csvContent += "No. TRX;Hari & Waktu Lengkap;Metode Pembayaran;Subtotal;Diskon (%);Nilai Diskon;Pajak (%);Nilai Pajak;Total Akhir;Uang Bayar;Kembalian;Rincian Barang\n";
+            
+            let riwayatList = Object.values(cacheRiwayat);
+            riwayatList.sort((a, b) => a.timestamp - b.timestamp);
+
+            riwayatList.forEach(trx => {
                 let rincian = trx.items.map(i => `${i.nama} (${i.qty}x@${i.harga})`).join(" | ");
                 let baris = [
-                    trx.id, `"${trx.waktu}"`, trx.metodeBayar || 'Tunai', trx.totalAkhir, trx.uangBayar, trx.kembalian, trx.diskonPersen, trx.pajakPersen, `"${rincian}"`
+                    trx.id, 
+                    `"${trx.waktu}"`, 
+                    trx.metodeBayar || 'Tunai', 
+                    trx.subtotal || 0,
+                    trx.diskonPersen || 0,
+                    trx.diskonNilai || 0,
+                    trx.pajakPersen || 0,
+                    trx.pajakNilai || 0,
+                    trx.totalAkhir || 0, 
+                    trx.uangBayar || 0, 
+                    trx.kembalian || 0, 
+                    `"${rincian}"`
                 ];
                 csvContent += baris.join(";") + "\n";
             });
             let encodedUri = encodeURI("data:text/csv;charset=utf-8," + csvContent);
             let link = document.createElement("a");
             link.setAttribute("href", encodedUri);
-            link.setAttribute("download", `Laporan_Kasir_${Date.now()}.csv`);
+            link.setAttribute("download", `Laporan_Kasir_Velovy_${Date.now()}.csv`);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            Toast.fire({ icon: 'success', title: 'Laporan CSV diunduh' });
+            Toast.fire({ icon: 'success', title: 'Laporan CSV berhasil diunduh' });
         }
 
+        // EKSPOR BACKUP JSON LENGKAP
         window.jalankanEksporJSON = function() {
             if (!cacheRiwayat || Object.keys(cacheRiwayat).length === 0) return Toast.fire({ icon: 'warning', title: 'Belum ada data untuk diekspor!' });
             let dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(cacheRiwayat, null, 2));
             let downloadAnchor = document.createElement('a');
             downloadAnchor.setAttribute("href", dataStr);
-            downloadAnchor.setAttribute("download", `Backup_Cloud_Kasir_${Date.now()}.json`);
+            downloadAnchor.setAttribute("download", `Backup_Kasir_Velovy_${Date.now()}.json`);
             document.body.appendChild(downloadAnchor);
             downloadAnchor.click();
             downloadAnchor.remove();
-            Toast.fire({ icon: 'success', title: 'Backup JSON diunduh' });
+            Toast.fire({ icon: 'success', title: 'Backup JSON berhasil diunduh' });
         }
 
         // ================= CETAK STRUK THERMAL =================
@@ -908,7 +1094,7 @@
                     </div>
                     <div class="line"></div>
                     <div>
-                        <span>ID: ${trx.id}</span><br>
+                        <span>No. TRX: ${trx.id}</span><br>
                         <span>Waktu: ${trx.waktu}</span>
                     </div>
                     <div class="line"></div>
