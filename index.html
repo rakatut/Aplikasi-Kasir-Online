@@ -21,7 +21,7 @@
                 <h1 class="text-2xl font-bold flex items-center gap-2 text-indigo-400">
                     <i class="fa-solid fa-cash-register"></i> Kasir Toko Velovy
                 </h1>
-                <p class="text-xs text-slate-400 mt-1">POS System dengan Shortcut Keyboard & Pencarian Cepat</p>
+                <p class="text-xs text-slate-400 mt-1">POS System dengan Shortcut Keyboard & Indikator Stok Menipis</p>
             </div>
             
             <!-- INDIKATOR ROLE & STATUS KONEKSI -->
@@ -63,6 +63,20 @@
                     <div class="bg-emerald-600/20 border border-emerald-500/30 p-4 rounded-2xl shadow-lg">
                         <h3 class="text-xs text-emerald-300 font-semibold uppercase mb-1"><i class="fa-solid fa-receipt mr-1"></i> Transaksi Hari Ini</h3>
                         <div id="dashTrx" class="text-2xl font-bold text-emerald-400">0</div>
+                    </div>
+                </div>
+
+                <!-- WIDGET DISPLAY PERINGATAN STOK MENIPIS (< 5 PCS) -->
+                <div id="widgetStokMenipis" class="hidden bg-rose-500/10 border border-rose-500/30 p-4 rounded-2xl shadow-lg space-y-2">
+                    <div class="flex items-center justify-between gap-2 text-rose-400 font-bold text-sm">
+                        <span class="flex items-center gap-2">
+                            <i class="fa-solid fa-triangle-exclamation text-base animate-pulse"></i> Peringatan Stok Menipis (&lt; 5 Pcs)
+                        </span>
+                        <span id="countStokMenipis" class="text-xs bg-rose-600 text-white px-2.5 py-0.5 rounded-full font-semibold">0 Produk</span>
+                    </div>
+                    <p class="text-xs text-slate-400">Segera lakukan restok untuk produk-produk di bawah ini:</p>
+                    <div id="listStokMenipis" class="flex flex-wrap gap-2 pt-1 text-xs">
+                        <!-- Badges produk stok menipis dirender otomatis dari Firebase -->
                     </div>
                 </div>
 
@@ -391,7 +405,6 @@
             btnLogin.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Memproses...';
             btnLogin.disabled = true;
 
-            // Atur agar sesi hanya bertahan selama tab terbuka
             setPersistence(auth, browserSessionPersistence)
                 .then(() => {
                     return signInWithEmailAndPassword(auth, email, password);
@@ -485,7 +498,7 @@
             });
         }
 
-        // ================= FILTER PENCARIAN PRODUK =================
+        // ================= FILTER PENCARIAN PRODUK & INDIKATOR STOK MENIPIS =================
         window.filterKatalogProduk = function() {
             const keyword = document.getElementById('searchProduk').value.toLowerCase();
             const select = document.getElementById('katalogProduk');
@@ -496,7 +509,8 @@
             Object.entries(cacheProduk).forEach(([key, prod]) => {
                 if (prod.nama.toLowerCase().includes(keyword)) {
                     const stokInfo = prod.stok !== undefined ? prod.stok : '∞';
-                    htmlSelect += `<option value="${prod.nama}" data-harga="${prod.harga}" data-stok="${stokInfo}" data-key="${key}">${prod.nama} - ${formatRupiah(prod.harga)} (Stok: ${stokInfo})</option>`;
+                    const warningTag = (typeof prod.stok === 'number' && prod.stok < 5) ? '⚠️ [STOK MENIPIS] ' : '';
+                    htmlSelect += `<option value="${prod.nama}" data-harga="${prod.harga}" data-stok="${stokInfo}" data-key="${key}">${warningTag}${prod.nama} - ${formatRupiah(prod.harga)} (Sisa Stok: ${stokInfo})</option>`;
                     count++;
                 }
             });
@@ -516,14 +530,26 @@
                 filterKatalogProduk();
                 
                 const containerListAdmin = document.getElementById('listMasterProduk');
+                const widgetStok = document.getElementById('widgetStokMenipis');
+                const listStokMenipis = document.getElementById('listStokMenipis');
+                const countStokMenipis = document.getElementById('countStokMenipis');
+
                 let htmlListAdmin = '';
+                let itemsStokMenipis = [];
 
                 if (Object.keys(cacheProduk).length === 0) {
                     containerListAdmin.innerHTML = '<span class="text-xs text-slate-500">Belum ada produk tersimpan di database.</span>';
+                    widgetStok.classList.add('hidden');
                 } else {
                     Object.entries(cacheProduk).forEach(([key, prod]) => {
                         const stokInfo = prod.stok !== undefined ? prod.stok : '∞';
-                        const badgeStok = prod.stok <= 5 ? 'bg-rose-500/20 text-rose-400' : 'bg-emerald-500/20 text-emerald-400';
+                        const isStokMenipis = typeof prod.stok === 'number' && prod.stok < 5;
+                        const badgeStok = isStokMenipis ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+
+                        // Kumpulkan produk stok < 5 pcs
+                        if (isStokMenipis) {
+                            itemsStokMenipis.push({ nama: prod.nama, stok: prod.stok, harga: prod.harga });
+                        }
 
                         htmlListAdmin += `
                             <span class="inline-flex items-center gap-1.5 bg-slate-900 border border-slate-700 text-slate-300 text-xs px-2.5 py-1 rounded-lg">
@@ -536,6 +562,20 @@
                         `;
                     });
                     containerListAdmin.innerHTML = htmlListAdmin;
+
+                    // Update Widget Display Stok Menipis
+                    if (itemsStokMenipis.length > 0) {
+                        widgetStok.classList.remove('hidden');
+                        countStokMenipis.innerText = `${itemsStokMenipis.length} Produk`;
+                        listStokMenipis.innerHTML = itemsStokMenipis.map(item => `
+                            <span class="bg-rose-500/20 border border-rose-500/30 text-rose-300 px-2.5 py-1 rounded-lg flex items-center gap-1 font-medium shadow-sm">
+                                <i class="fa-solid fa-box text-rose-400 mr-0.5"></i> ${item.nama}
+                                <span class="bg-rose-600 text-white text-[10px] px-1.5 py-0.2 rounded font-bold ml-1">${item.stok} pcs</span>
+                            </span>
+                        `).join('');
+                    } else {
+                        widgetStok.classList.add('hidden');
+                    }
                 }
             });
         }
