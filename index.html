@@ -277,7 +277,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js";
         import { getDatabase, ref, push, set, onValue, remove, update } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-database.js";
-        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js";
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBSdyiM4B8ZHCHao6RZ-94Yxv-3Hql6Mmg",
@@ -391,7 +391,11 @@
             btnLogin.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Memproses...';
             btnLogin.disabled = true;
 
-            signInWithEmailAndPassword(auth, email, password)
+            // Atur agar sesi hanya bertahan selama tab terbuka
+            setPersistence(auth, browserSessionPersistence)
+                .then(() => {
+                    return signInWithEmailAndPassword(auth, email, password);
+                })
                 .then(() => {
                     tutupModalPin();
                     Toast.fire({ icon: 'success', title: 'Berhasil Login sebagai Admin' });
@@ -426,7 +430,7 @@
                 badge.innerHTML = '<i class="fa-solid fa-user mr-1.5"></i> Mode: Operator';
                 badge.className = 'text-xs bg-slate-700 text-slate-300 px-3 py-1.5 rounded-full border border-slate-600 flex items-center transition-all';
                 btnToggle.innerHTML = '<i class="fa-solid fa-lock-open mr-1.5"></i> Login Admin';
-                btnToggle.className = 'text-xs bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 rounded-full transition shadow-lg flex items-center';
+                btnToggle.className = 'text-xs bg-rose-600 hover:bg-rose-700 text-white px-3.5 py-1.5 rounded-full transition shadow-lg flex items-center';
                 adminPanel.classList.add('hidden');
                 sectionProduk.classList.add('hidden');
             }
@@ -509,7 +513,7 @@
             onValue(produkRef, (snapshot) => {
                 cacheProduk = snapshot.val() || {};
                 
-                filterKatalogProduk(); // Render dropdown sesuai kata kunci di search bar
+                filterKatalogProduk();
                 
                 const containerListAdmin = document.getElementById('listMasterProduk');
                 let htmlListAdmin = '';
